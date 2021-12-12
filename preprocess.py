@@ -3,6 +3,7 @@ import nltk
 import pickle
 import string
 from tqdm import tqdm
+import pandas as pd
 from nltk.corpus import stopwords
 import os
 
@@ -32,7 +33,7 @@ class Preprocessing:
         self._initial_vocabulary = Vocabulary(f'{initial_language}')
         self._target_vocabulary = Vocabulary(f'{target_language}')
 
-    def __load_corpus(self, filename, chunk_size, encoding='utf-8'):
+    def _load_by_line(self, filename, chunk_size, encoding='utf-8'):
         corpus = []
         with open(filename, encoding=encoding) as file:
             if chunk_size == 0:
@@ -48,7 +49,19 @@ class Preprocessing:
 
         return corpus
 
-    def clear_corporus(self, corpus, target_language=False):
+    def _load_csv(self, filename):
+        data = pd.read_csv(filename)
+        return data[data.columns[0]].tolist(), data[data.columns[1]].tolist()
+
+    def _load_tweet(self, filename): #delete in the future
+        df= pd.read_csv('Tweets.csv', sep=',')
+        tweet_df = df[['text', 'airline_sentiment']]
+        tweet_df = tweet_df[tweet_df['airline_sentiment'] != 'neutral']
+        data = tweet_df
+        return data[data.columns[0]].tolist(), data[data.columns[1]].tolist()
+
+
+    def clear_corpus(self, corpus, target_language=False):
         if target_language:
             corpus = ['START_ ' + sentence.lower().strip().translate(str.maketrans('', '', string.punctuation)) +
                       " _END" for sentence in tqdm(corpus)]
@@ -57,12 +70,15 @@ class Preprocessing:
             #           stopwords.words('english')]) for sentence in tqdm(corpus)]
             ###
 
-            save_data(f'cleaned_corpora.txt.{self._target_language}', corpus)
+            save_data(f'cleaned_corpus.txt.{self._target_language}', corpus)
         else:
             corpus = [sentence.lower().strip().translate(str.maketrans('', '', string.punctuation))
                       for sentence in tqdm(corpus)]
 
-            save_data(f'cleaned_corpora.txt.{self._initial_language}', corpus)
+            # corpus = [' '.join([word for word in sentence.split(' ') if word not in
+            #            stopwords.words('english')]) for sentence in tqdm(corpus)]
+
+            save_data(f'cleaned_corpus.txt.{self._initial_language}', corpus)
 
         return corpus
 
@@ -102,24 +118,95 @@ class Preprocessing:
 
         return target_input_representation, target_output_representation
 
-    def preprocess(self, chunk_size=0, initial_stage=1, seq_length=20):  # ADD ENUM WITH STAGES
+    def preprocess_SA(self, chunk_size=0, initial_stage=1, seq_length=50):
 
         if initial_stage <= 1:
             print("STAGE ONE - CLEANING DATA")
-            initial_corpus = self.__load_corpus(self._initial_language_file, chunk_size)
-            target_corpus = self.__load_corpus(self._target_language_file, chunk_size)
+            #initial_corpus, target_corpus = self._load_csv(self._initial_language_file)
+            initial_corpus, target_corpus = self._load_tweet(self._initial_language_file)
             print("INITIAL CORPUS CLEANING...")
-            cleaned_initial_corpus = self.clear_corporus(initial_corpus, target_language=False)
-            print("TARGET CORPUS CLEANING...")
-            cleaned_target_corpus = self.clear_corporus(target_corpus, target_language=True)
+            cleaned_initial_corpus = self.clear_corpus(initial_corpus, target_language=False)
             print("STAGE ONE COMPLETE")
 
         if initial_stage <= 2:
             print("STAGE TWO - CREATING VOCABULARIES")
             if initial_stage > 1:
                 print("LOADING DATA...")
-                cleaned_initial_corpus = load_data(f'cleaned_corpora.txt.{self._initial_language}')
-                cleaned_target_corpus = load_data(f'cleaned_corpora.txt.{self._target_language}')
+                cleaned_initial_corpus = load_data(f'cleaned_corpus.txt.{self._initial_language}')
+
+            print("CREATING INITIAL LANGUAGE VOCABULARY...")
+            for sentence in tqdm(cleaned_initial_corpus):
+                self._initial_vocabulary.add_sentence(sentence)
+
+            print("SAVING VOCABULARY...")
+            save_data(f'vocabulary.{self._initial_language}', self._initial_vocabulary)
+
+            print("STAGE TWO COMPLETE")
+
+            if initial_stage <= 3:
+                print("STAGE THREE - CREATING TEXT REPRESENTATION")
+
+                if initial_stage > 2:
+                    print("LOADING DATA...")
+                    cleaned_initial_corpus = load_data(f'cleaned_corpora.txt.{self._initial_language}')
+                    self._initial_vocabulary = load_data(f'vocabulary.{self._initial_language}')
+
+                print("CREATING INITIAL TEXT REPRESENTATION...")
+                cleaned_initial_corpus = self.create_text_representation(
+                    cleaned_initial_corpus, seq_length, target_language=False)
+                initial_text_representation = np.array(cleaned_initial_corpus, dtype=object)
+                save_data(f'text_representation.{self._initial_language}', initial_text_representation)
+
+            # REMOVE TO SPECIFIC
+            target_words = []
+            for word in target_corpus:
+                if word not in target_words:
+                    target_words.append(word)
+            print(target_words)
+
+            target_dict = {}
+            for idx, word in enumerate(target_words):
+                target_dict[word] = idx
+
+            target_representation = []
+            print(target_dict)
+            for word in target_corpus:
+                target_representation.append(target_dict[word])
+
+            #print(target_representation)
+            target_corpus = target_representation
+            # EXTREMELY LAME REMAKE WITH VOCAB CLASS!!!!
+
+
+            print(np.shape(initial_text_representation))
+            print(np.shape(target_corpus))
+
+            print(initial_text_representation[:5])
+            print(target_corpus[:5])
+
+            return initial_text_representation, target_corpus, target_dict
+
+
+
+
+    def preprocess_NMT(self, chunk_size=0, initial_stage=1, seq_length=20):  # ADD ENUM WITH STAGES
+
+        if initial_stage <= 1:
+            print("STAGE ONE - CLEANING DATA")
+            initial_corpus = self._load_by_line(self._initial_language_file, chunk_size)
+            target_corpus = self._load_by_line(self._target_language_file, chunk_size)
+            print("INITIAL CORPUS CLEANING...")
+            cleaned_initial_corpus = self.clear_corpus(initial_corpus, target_language=False)
+            print("TARGET CORPUS CLEANING...")
+            cleaned_target_corpus = self.clear_corpus(target_corpus, target_language=True)
+            print("STAGE ONE COMPLETE")
+
+        if initial_stage <= 2:
+            print("STAGE TWO - CREATING VOCABULARIES")
+            if initial_stage > 1:
+                print("LOADING DATA...")
+                cleaned_initial_corpus = load_data(f'cleaned_corpus.txt.{self._initial_language}')
+                cleaned_target_corpus = load_data(f'cleaned_corpus.txt.{self._target_language}')
 
             print("CREATING INITIAL LANGUAGE VOCABULARY...")
             for sentence in tqdm(cleaned_initial_corpus):
