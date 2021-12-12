@@ -1,14 +1,16 @@
 import numpy as np
-import keras
 import nltk
 import pickle
 import string
 from tqdm import tqdm
+from nltk.corpus import stopwords
+import os
 
+from vocabulary import Vocabulary
 
-# INITIAL LANGUAGE = RU
-# TARGET LANGUAGE = EN
-
+def list_splitter(list_to_split, ratio):
+    first_half = int(len(list_to_split) * ratio)
+    return list_to_split[:first_half], list_to_split[first_half:]
 
 def load_data(filename):
     with open(filename, 'rb') as file:
@@ -21,57 +23,7 @@ def save_data(filename, data):
         pickle.dump(data, file, pickle.HIGHEST_PROTOCOL)
 
 
-class Vocabulary:
-    PAD_token = 0  # Used for padding short sentences
-    SOS_token = 1  # Start-of-sentence token
-    EOS_token = 2  # End-of-sentence token
-
-    def __init__(self, name):
-        self.name = name
-        self.word2index = {}
-        self.word2count = {}
-        self.index2word = {self.PAD_token: "_PAD_", self.SOS_token: "START_", self.EOS_token: "_END"}
-        self.num_words = 3
-        self.num_sentences = 0
-        self.longest_sentence = 0
-
-    def add_word(self, word):
-        if word not in self.word2index:
-            # First entry of word into vocabulary
-            self.word2index[word] = self.num_words
-            self.word2count[word] = 1
-            self.index2word[self.num_words] = word
-            self.num_words += 1
-        else:
-            # Word exists; increase word count
-            self.word2count[word] += 1
-
-    def add_sentence(self, sentence):
-        sentence_len = 0
-        for word in sentence.split(' '):  # bit lame
-            sentence_len += 1
-            self.add_word(word)
-        if sentence_len > self.longest_sentence:
-            # This is the longest sentence
-            self.longest_sentence = sentence_len
-        # Count the number of sentences
-        self.num_sentences += 1
-
-    def convert_sentence(self, sentence):
-        converted_sent = []
-        for word in sentence.split(' '):
-            converted_sent.append(self.to_index(word))
-
-        return converted_sent
-
-    def to_word(self, index):
-        return self.index2word[index]
-
-    def to_index(self, word):
-        return self.word2index[word]
-
-
-class Translator:
+class Preprocessing:
     def __init__(self, initial_language: str, target_language: str, initial_language_file, target_language_file):
         self._initial_language = initial_language
         self._target_language = target_language
@@ -100,10 +52,16 @@ class Translator:
         if target_language:
             corpus = ['START_ ' + sentence.lower().strip().translate(str.maketrans('', '', string.punctuation)) +
                       " _END" for sentence in tqdm(corpus)]
+            ###
+            #corpus = [' '.join([word for word in sentence.split(' ') if word not in
+            #           stopwords.words('english')]) for sentence in tqdm(corpus)]
+            ###
+
             save_data(f'cleaned_corpora.txt.{self._target_language}', corpus)
         else:
             corpus = [sentence.lower().strip().translate(str.maketrans('', '', string.punctuation))
                       for sentence in tqdm(corpus)]
+
             save_data(f'cleaned_corpora.txt.{self._initial_language}', corpus)
 
         return corpus
@@ -116,13 +74,35 @@ class Translator:
                 corpus[i] = self._initial_vocabulary.convert_sentence(corpus[i][:])
 
             sent_len = len(corpus[i])
-            if sent_len >= seq_length:
+            if sent_len >= seq_length + 1:
                 corpus[i] = corpus[i][:seq_length]
             else:
                 for j in range(seq_length - sent_len):
                     corpus[i].append(0)
 
-    def preprocess(self, chunk_size=0, initial_stage=1, seq_length=64):  # ADD ENUM WITH STAGES
+        return corpus
+
+    def create_output_data(self, target_corpus):
+        target_output_representation = []
+        for i in range(len(target_corpus)):
+            target_output_representation.append(target_corpus[i][1:])
+            target_corpus[i] = target_corpus[i][:-1]
+
+        target_input_representation = np.array(target_corpus, dtype=object)
+        target_output_representation = np.array(target_output_representation, dtype=object)
+
+        training_data = list(zip(target_input_representation, target_output_representation))
+        #random.shuffle(training_data)
+        training_data = np.array(training_data)
+        target_input_representation = training_data[:, 0]
+        target_output_representation = training_data[:, 1]
+
+        a, b = np.shape(target_output_representation)
+        target_output_representation = np.reshape(target_output_representation, (a, b, 1)) # LAME
+
+        return target_input_representation, target_output_representation
+
+    def preprocess(self, chunk_size=0, initial_stage=1, seq_length=20):  # ADD ENUM WITH STAGES
 
         if initial_stage <= 1:
             print("STAGE ONE - CLEANING DATA")
@@ -165,15 +145,31 @@ class Translator:
                 self._initial_vocabulary = load_data(f'vocabulary.{self._initial_language}')
                 self._target_vocabulary = load_data(f'vocabulary.{self._target_language}')
 
-            print("CREATING INITIAL TEXT REPRESENTATION")
-            self.create_text_representation(cleaned_initial_corpus, seq_length, target_language=False)
+            print("CREATING INITIAL TEXT REPRESENTATION...")
+            cleaned_initial_corpus = self.create_text_representation(
+                cleaned_initial_corpus, seq_length, target_language=False)
             initial_text_representation = np.array(cleaned_initial_corpus, dtype=object)
-            save_data(f'text_representatiom.{self._initial_language}', initial_text_representation)
+            save_data(f'text_representation.{self._initial_language}', initial_text_representation)
 
-            print("CREATING TARGET TEXT REPRESENTATION")
-            self.create_text_representation(cleaned_target_corpus, seq_length, target_language=True)
-            target_text_representation = np.array(cleaned_target_corpus, dtype=object)
-            save_data(f'text_representatiom.{self._target_language}', target_text_representation)
+            print("CREATING TARGET TEXT REPRESENTATION...")
+            cleaned_target_corpus = self.create_text_representation(
+                cleaned_target_corpus, seq_length, target_language=True)
 
+            print("CREATING OUTPUT DATA REPRESENTATION...")
+            target_input_representation, target_output_representation = self.create_output_data(cleaned_target_corpus)
+            save_data(f'target_input_representation.{self._target_language}', target_input_representation)
+            save_data(f'target_output_representation.{self._target_language}', target_output_representation)
 
+            train_data = (initial_text_representation, target_input_representation, target_output_representation)
+            test_data = []
 
+            # train_data = (list_splitter(initial_text_representation, 0.8)[0],
+            #               list_splitter(target_input_representation, 0.8)[0],
+            #               list_splitter(target_output_representation, 0.8)[0])
+            #
+            # test_data = (list_splitter(initial_text_representation, 0.8)[1],
+            #               list_splitter(target_output_representation, 0.8)[1])
+
+            return self._initial_vocabulary, self._target_vocabulary, train_data, test_data
+
+            ###
