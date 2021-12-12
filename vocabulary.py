@@ -3,12 +3,19 @@ class Vocabulary:
     SOS_token = 1  # Start-of-sentence token
     EOS_token = 2  # End-of-sentence token
 
-    def __init__(self, name):
+    def __init__(self, name, task): #tasks: MT, SA
         self.name = name
-        self.word2index = {'_PAD_': self.PAD_token, 'START_': self.SOS_token, '_END': self.EOS_token}
-        self.word2count = {'_PAD_': 0, 'START_': 0, '_END': 0}
-        self.index2word = {self.PAD_token: '_PAD_', self.SOS_token: 'START_', self.EOS_token: '_END'}
-        self.num_words = 3
+        if task == "MT":
+            self.word2index = {'_PAD_': self.PAD_token, 'START_': self.SOS_token, '_END': self.EOS_token}
+            self.word2count = {'_PAD_': 0, 'START_': 0, '_END': 0}
+            self.index2word = {self.PAD_token: '_PAD_', self.SOS_token: 'START_', self.EOS_token: '_END'}
+            self.num_words = 3
+        else:
+            self.word2index = {}
+            self.word2count = {}
+            self.index2word = {}
+            self.num_words = 0
+
         self.num_sentences = 0
         self.longest_sentence = 0
 

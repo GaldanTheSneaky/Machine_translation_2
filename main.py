@@ -38,8 +38,40 @@ def runNSA():
     model.build_model()
     model.train()
 
+def run_main_SA():
+    preprocessor = Preprocessing(initial_language="en",
+                                 target_language=TARGET_LANGUAGE,
+                                 initial_language_file=SA_FILENAME,
+                                 target_language_file=EN_FILENAME,
+                                 task="SA")
+
+    x_train, x_vocab, y_train, y_vocab = preprocessor.run("csv")
+
+    print(x_vocab.word2index)
+    print(y_vocab.word2index)
+
+    model = SAModel([x_train, y_train], y_vocab)
+    model.build_model()
+    model.train()
+
+
+def run_main_MT():
+    preprocessor = Preprocessing(initial_language=INITIAL_LANGUAGE,
+                       target_language=TARGET_LANGUAGE,
+                       initial_language_file=RU_FILENAME,
+                       target_language_file=EN_FILENAME,
+                       task="MT")
+
+    initial_data, initial_vocab, target_data, target_vocab = preprocessor.run("txt")
+    print(initial_data[0])
+    print(target_data[0][0])
+    print(target_data[1][0])
+    model = NMTModel(initial_vocab, target_vocab, use_attention=True)
+    model.build()
+    test_data = ([initial_data[2]], [target_data[1][2]])
+    model.train([initial_data, target_data[0], target_data[1]], test_data, 30)
 
 
 
 if __name__ == "__main__":
-    runNSA()
+    run_main_SA()

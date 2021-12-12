@@ -20,7 +20,7 @@ class SAModel:
         self.batch_size = 100
         self.max_target_step = 30
         #self.vocab_size = len(source_dict.word2index)
-        self.vocab_size = len(source_dict)
+        self.vocab_size = len(source_dict.word2index)
         self.source_dict = source_dict
         self.train_model = None
         self.encoder_model = None
@@ -29,18 +29,18 @@ class SAModel:
     def build_model(self):
 
         model = Sequential()
-        # model.add(Embedding(self.vocab_size, 200, input_length=len(self.x_train[0]), mask_zero=True))
-        # model.add(Dropout(self.embedding_dropout_rate))
+        model.add(Embedding(self.vocab_size, 200, input_length=len(self.x_train[0]), mask_zero=True))
+        model.add(Dropout(self.embedding_dropout_rate))
 
-        # model.add(Bidirectional(LSTM(256, return_sequences=True)))
-        # model.add(Dropout(self.hidden_dropout_rate))
-        # model.add(BatchNormalization())
-        #
-        # model.add(Bidirectional(LSTM(128)))
-        # model.add(Dropout(self.hidden_dropout_rate))
-        # model.add(BatchNormalization())
+        model.add(Bidirectional(LSTM(256, return_sequences=True)))
+        model.add(Dropout(self.hidden_dropout_rate))
+        model.add(BatchNormalization())
 
-        model.add(Dense(64, activation='relu', input_shape=np.shape(self.x_train[0])))
+        model.add(Bidirectional(LSTM(128)))
+        model.add(Dropout(self.hidden_dropout_rate))
+        model.add(BatchNormalization())
+
+        model.add(Dense(64, activation='relu'))
         model.add(Dropout(self.hidden_dropout_rate))
         model.add(BatchNormalization())
 
@@ -74,5 +74,6 @@ class SAModel:
 
         self._model.save('model')
         print("Finish")
+
 
 
