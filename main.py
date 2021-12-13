@@ -1,11 +1,10 @@
 from preprocess import Preprocessing
-from model import NMTModel
+from MT_model import NMTModel
 from SA_model import SAModel
+import pandas as pd
 
 INITIAL_LANGUAGE = 'ru'
 TARGET_LANGUAGE = "en"
-#RU_FILENAME = 'corpus.en_ru.1m.ru'
-#EN_FILENAME = 'corpus.en_ru.1m.en'
 
 SA_FILENAME = "IMDB.csv"
 SA_TEST_FILENAME = "test_SA_data.text"
@@ -13,42 +12,21 @@ RU_FILENAME = 'test_corpus.ru'
 EN_FILENAME = 'test_corpus.en'
 
 
-def runNMT():
-    preprocessor = Preprocessing(initial_language=INITIAL_LANGUAGE,
-                       target_language=TARGET_LANGUAGE,
-                       initial_language_file=RU_FILENAME,
-                       target_language_file=EN_FILENAME)
+def load_tweet():
+    df = pd.read_csv('Tweets.csv', sep=',')
+    tweet_df = df[['text', 'airline_sentiment']]
+    tweet_df = tweet_df[tweet_df['airline_sentiment'] != 'neutral']
+    data = tweet_df
+    return data[data.columns[0]].tolist(), data[data.columns[1]].tolist()
 
-    initial_vocabulary, target_vocabulary, train_data, test_data = preprocessor.preprocess_NMT(
-        chunk_size=50000, initial_stage=0, seq_length=15)
-    test_data = ([train_data[0][2]], [train_data[2][2]])
-
-    model = NMTModel(initial_vocabulary, target_vocabulary, use_attention=True)
-    model.build()
-    model.train(train_data, test_data, 30)
-
-def runNSA():
-    preprocessor = Preprocessing(initial_language="en",
-                       target_language=TARGET_LANGUAGE,
-                       initial_language_file=SA_FILENAME,
-                       target_language_file=EN_FILENAME)
-    x_train, y_train, dict = preprocessor.preprocess_SA()
-
-    model = SAModel([x_train, y_train], dict)
-    model.build_model()
-    model.train()
 
 def run_main_SA():
-    preprocessor = Preprocessing(initial_language="en",
-                                 target_language=TARGET_LANGUAGE,
-                                 initial_language_file=SA_FILENAME,
-                                 target_language_file=EN_FILENAME,
+    preprocessor = Preprocessing(initial_data="en",
+                                 initial_data_file=SA_FILENAME,
                                  task="SA")
 
-    x_train, x_vocab, y_train, y_vocab = preprocessor.run("csv")
-
-    print(x_vocab.word2index)
-    print(y_vocab.word2index)
+    initial_data, target_data = load_tweet()
+    x_train, x_vocab, y_train, y_vocab = preprocessor.run(initial_stage=1, initial_corpus=initial_data, target_corpus=target_data)
 
     model = SAModel([x_train, y_train], y_vocab)
     model.build_model()
@@ -56,21 +34,17 @@ def run_main_SA():
 
 
 def run_main_MT():
-    preprocessor = Preprocessing(initial_language=INITIAL_LANGUAGE,
-                       target_language=TARGET_LANGUAGE,
-                       initial_language_file=RU_FILENAME,
-                       target_language_file=EN_FILENAME,
-                       task="MT")
+    preprocessor = Preprocessing(initial_data=INITIAL_LANGUAGE,
+                                 target_data=TARGET_LANGUAGE,
+                                 initial_data_file=RU_FILENAME,
+                                 target_data_file=EN_FILENAME,
+                                 task="MT")
 
-    initial_data, initial_vocab, target_data, target_vocab = preprocessor.run("txt")
-    print(initial_data[0])
-    print(target_data[0][0])
-    print(target_data[1][0])
+    initial_data, initial_vocab, target_data, target_vocab = preprocessor.run("txt", initial_stage=3)
     model = NMTModel(initial_vocab, target_vocab, use_attention=True)
     model.build()
     test_data = ([initial_data[2]], [target_data[1][2]])
     model.train([initial_data, target_data[0], target_data[1]], test_data, 30)
-
 
 
 if __name__ == "__main__":

@@ -1,13 +1,8 @@
-import time
 import numpy as np
 from keras import Sequential
 from keras.layers import Embedding, LSTM, Dropout, Dense, Bidirectional, BatchNormalization
-from keras import Model, Input
 from tensorflow.keras.optimizers import Adam
-from nltk.translate.bleu_score import corpus_bleu
 
-import keras.backend as K
-from keras.layers import Layer
 
 class SAModel:
     def __init__(self, training_data, source_dict):
@@ -19,7 +14,6 @@ class SAModel:
         self.embedding_dropout_rate = 0.2
         self.batch_size = 100
         self.max_target_step = 30
-        #self.vocab_size = len(source_dict.word2index)
         self.vocab_size = len(source_dict.word2index)
         self.source_dict = source_dict
         self.train_model = None
@@ -52,9 +46,6 @@ class SAModel:
         self._model = model
 
     def train(self, batch_size=300, epochs=30, verbose=1):
-        """Trains model and saves to '\model'
-
-        """
         x_train = self.x_train
         x_train = np.asarray(x_train).astype('int32')
         y_train = self.y_train

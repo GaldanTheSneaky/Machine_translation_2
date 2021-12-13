@@ -3,10 +3,10 @@ import numpy as np
 from keras.layers import Embedding, LSTM, Dropout, Dense
 from keras import Model, Input
 from tensorflow.keras.optimizers import Adam
-from nltk.translate.bleu_score import corpus_bleu
 
 import keras.backend as K
 from keras.layers import Layer
+
 
 class AttentionLayer(Layer):
     def compute_mask(self, inputs, mask=None):
@@ -18,22 +18,19 @@ class AttentionLayer(Layer):
         return input_shape[1][0], input_shape[1][1], input_shape[1][2] * 2
 
     def call(self, inputs, mask=None):
-        # encoder_outputs: [batch_size, max_source_sent_len, hidden_size]
-        # decoder_outputs: [batch_size, max_target_sent_len, hidden_size]​
         encoder_outputs, decoder_outputs = inputs
 
         decoder_outputs_t = K.permute_dimensions(decoder_outputs, (0, 2, 1))
-        # [batch_size, max_source_sent_len, max_target_sent_len]​
         luong_score = K.batch_dot(encoder_outputs, decoder_outputs_t)
         luong_score = K.softmax(luong_score, axis=1)
 
         encoder_vector = K.expand_dims(encoder_outputs, axis=2) * K.expand_dims(luong_score, axis=3)
         encoder_vector = K.sum(encoder_vector, axis=1)
 
-        # [batch_size, max_target_sent_len, 2 * hidden_size]
         new_decoder_outputs = K.concatenate([decoder_outputs, encoder_vector])
 
         return new_decoder_outputs
+
 
 class NMTModel:
     def __init__(self, source_dict, target_dict, use_attention):
@@ -83,7 +80,6 @@ class NMTModel:
 
         encoder_states = [encoder_state_h, encoder_state_c]
 
-        # decoder for training
         decoder_lstm = LSTM(
             self.hidden_size,
             recurrent_dropout=self.hidden_dropout_rate,
@@ -161,9 +157,6 @@ class NMTModel:
             source_words_train = np.array(source_words_train, dtype=int)
             target_words_train = np.array(target_words_train, dtype=int)
             target_words_train_labels = np.array(target_words_train_labels, dtype=int)
-            # print(source_words_train[1])
-            # print(target_words_train[1])
-            # print(target_words_train_labels[1])
 
             self.train_model.fit(
                 [source_words_train, target_words_train],
@@ -172,11 +165,7 @@ class NMTModel:
                 verbose=1
             )
 
-            #print("Time used for epoch {}: {}".format(epoch + 1, self.time_used(epoch_time)))
-            dev_time = time.time()
-            #print("Evaluating on test set after epoch {}/{}:".format(epoch + 1, epochs))
             self.eval(test_data)
-            #print("Time used for evaluate on test set: {}".format(self.time_used(dev_time)))
 
         print("Training finished!")
         print("Time used for training: {}".format(self.time_used(start_time)))
@@ -188,8 +177,6 @@ class NMTModel:
 
     def get_target_sentences(self, sents, vocab, reference=False):
         str_sents = []
-        #print(sents)
-        #print(sents.shape)
         num_sent, max_len = sents.shape
         for i in range(num_sent):
             str_sent = []
@@ -210,7 +197,6 @@ class NMTModel:
     def eval(self, dataset):
         source_words, target_words_labels = dataset
         source_words = np.array(source_words, dtype=int)
-        #print(source_words)
         target_words_labels = np.array(target_words_labels, dtype=int)
 
         vocab = self.target_dict.index2word
@@ -228,18 +214,8 @@ class NMTModel:
             step_target_words = np.argmax(step_decoder_outputs, axis=2)
             predictions.append(step_target_words)
 
-
         candidates = self.get_target_sentences(np.concatenate(predictions, axis=1), vocab)
         print(candidates)
         a, b, _ = np.shape(target_words_labels)
         references = self.get_target_sentences(np.reshape(target_words_labels, (a, b)), vocab, reference=True)
         print(references)
-
-        #score = corpus_bleu(references, candidates)
-        #print("Model BLEU score: %.2f" % (score * 100.0))
-
-
-# ru = "corpus.en_ru.1m.ru"
-# en = "corpus.en_ru.1m.en"
-
-

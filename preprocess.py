@@ -6,12 +6,15 @@ from tqdm import tqdm
 import pandas as pd
 from nltk.corpus import stopwords
 import os
+import random
 
 from vocabulary import Vocabulary
+
 
 def list_splitter(list_to_split, ratio):
     first_half = int(len(list_to_split) * ratio)
     return list_to_split[:first_half], list_to_split[first_half:]
+
 
 def load_data(filename):
     with open(filename, 'rb') as file:
@@ -25,13 +28,13 @@ def save_data(filename, data):
 
 
 class Preprocessing:
-    def __init__(self, initial_language: str, target_language: str, initial_language_file, target_language_file, task):
-        self._initial_language = initial_language
-        self._target_language = target_language
-        self._initial_language_file = initial_language_file
-        self._target_language_file = target_language_file
-        self._initial_vocabulary = Vocabulary(f'{initial_language}', task)
-        self._target_vocabulary = Vocabulary(f'{target_language}', task)
+    def __init__(self, task, initial_data: str = None, target_data: str = None, initial_data_file=None, target_data_file=None):
+        self._initial_language = initial_data
+        self._target_language = target_data
+        self._initial_data_file = initial_data_file
+        self._target_data_file = target_data_file
+        self._initial_vocabulary = Vocabulary(f'{initial_data}', task)
+        self._target_vocabulary = Vocabulary(f'{target_data}', task)
         self._task = task
 
     def _load_by_line(self, filename, chunk_size, encoding='utf-8'):
@@ -54,24 +57,23 @@ class Preprocessing:
         data = pd.read_csv(filename)
         return data[data.columns[0]].tolist(), data[data.columns[1]].tolist()
 
-    def _load_tweet(self, filename): #delete in the future
-        df= pd.read_csv('Tweets.csv', sep=',')
+    def _load_tweet(self, filename):  # delete in the future
+        df = pd.read_csv('Tweets.csv', sep=',')
         tweet_df = df[['text', 'airline_sentiment']]
         tweet_df = tweet_df[tweet_df['airline_sentiment'] != 'neutral']
         data = tweet_df
         return data[data.columns[0]].tolist(), data[data.columns[1]].tolist()
 
-
-    def clear_corpus(self, corpus, target_language=False):
+    def clear_corpus(self, corpus, save_file_type, target_language=False):
         if target_language:
             corpus = ['START_ ' + sentence.lower().strip().translate(str.maketrans('', '', string.punctuation)) +
                       " _END" for sentence in tqdm(corpus)]
             ###
-            #corpus = [' '.join([word for word in sentence.split(' ') if word not in
+            # corpus = [' '.join([word for word in sentence.split(' ') if word not in
             #           stopwords.words('english')]) for sentence in tqdm(corpus)]
             ###
 
-            save_data(f'cleaned_corpus.txt.{self._target_language}', corpus)
+            save_data(f'cleaned_corpus.txt.{save_file_type}', corpus)
         else:
             corpus = [sentence.lower().strip().translate(str.maketrans('', '', string.punctuation))
                       for sentence in tqdm(corpus)]
@@ -79,7 +81,7 @@ class Preprocessing:
             # corpus = [' '.join([word for word in sentence.split(' ') if word not in
             #            stopwords.words('english')]) for sentence in tqdm(corpus)]
 
-            save_data(f'cleaned_corpus.txt.{self._initial_language}', corpus)
+            save_data(f'cleaned_corpus.txt.{save_file_type}', corpus)
 
         return corpus
 
@@ -109,38 +111,36 @@ class Preprocessing:
         target_output_representation = np.array(target_output_representation, dtype=object)
 
         training_data = list(zip(target_input_representation, target_output_representation))
-        #random.shuffle(training_data)
+        random.shuffle(training_data)
         training_data = np.array(training_data)
         target_input_representation = training_data[:, 0]
         target_output_representation = training_data[:, 1]
 
         a, b = np.shape(target_output_representation)
-        target_output_representation = np.reshape(target_output_representation, (a, b, 1)) # LAME
+        target_output_representation = np.reshape(target_output_representation, (a, b, 1))  # LAME
 
         return target_input_representation, target_output_representation
 
-    def run(self, data_extension: str, chunk_size=0, initial_stage=0, seq_length=50): #data_extensions: txt(line by line), csv
+    def run(self, data_extension=None, chunk_size=0, initial_stage=0, seq_length=50, initial_corpus=None,
+            target_corpus=None):  # data_extensions: txt(line by line), csv
         if initial_stage <= 0:
             print("STAGE ZERO - LOADING DATA")
             if data_extension == "txt":
-                initial_corpus = self._load_by_line(self._initial_language_file, chunk_size)
-                target_corpus = self._load_by_line(self._target_language_file, chunk_size)
+                initial_corpus = self._load_by_line(self._initial_data_file, chunk_size)
+                target_corpus = self._load_by_line(self._target_data_file, chunk_size)
             elif data_extension == "csv":
-                initial_corpus, target_corpus = self._load_tweet(self._initial_language_file)
+                initial_corpus, target_corpus = self._load_csv(self._initial_data_file)
             else:
-                raise(Exception("Invalid file extension"))
+                raise (Exception("Invalid file extension"))
 
-        #if initial_stage > 0:
-
-        initial_data, initial_vocab = self.preprocess(initial_corpus, initial_stage=1, seq_length=seq_length, if_target=False)
-        target_data, target_vocab = self.preprocess(target_corpus, initial_stage=1,seq_length=seq_length, if_target=True)
+        initial_data, initial_vocab = self.preprocess(initial_corpus, initial_stage=initial_stage,
+                                                      seq_length=seq_length, if_target=False)
+        target_data, target_vocab = self.preprocess(target_corpus, initial_stage=initial_stage, seq_length=seq_length,
+                                                    if_target=True)
 
         return initial_data, initial_vocab, target_data, target_vocab
 
-
-
-
-    def preprocess(self, corpus, initial_stage, seq_length, if_target: bool): # tasks: SA, MT
+    def preprocess(self, corpus, initial_stage, seq_length, if_target: bool):  # tasks: SA, MT
         if if_target:
             save_file_type = "target"
         else:
@@ -152,7 +152,7 @@ class Preprocessing:
             if self._task == "SA" and if_target:
                 cleaned_corpus = corpus
             else:
-                cleaned_corpus = self.clear_corpus(corpus, target_language=if_target)
+                cleaned_corpus = self.clear_corpus(corpus, target_language=if_target, save_file_type=save_file_type)
 
             print("STAGE ONE COMPLETE")
 
@@ -172,173 +172,28 @@ class Preprocessing:
 
             print("STAGE TWO COMPLETE")
 
-            if initial_stage <= 3:
-                print("STAGE THREE - CREATING TEXT REPRESENTATION")
-
-                if initial_stage > 2:
-                    print("LOADING DATA...")
-                    cleaned_corpus = load_data(f'cleaned_corpora.txt.{save_file_type}')
-                    vocabulary = load_data(f'vocabulary.{save_file_type}')
-
-                print("CREATING TEXT REPRESENTATION...")
-                if self._task == "SA" and if_target:
-                    seq_length = 1
-
-                cleaned_corpus = self.create_text_representation(
-                    cleaned_corpus, seq_length, vocabulary, target_language=if_target)
-                text_representation = np.array(cleaned_corpus, dtype=object)
-                save_data(f'text_representation.{save_file_type}', text_representation)
-
-                if self._task == "MT" and if_target:
-                    target_input_representation, target_output_representation = self.create_output_data(
-                        cleaned_corpus)
-                    save_data(f'target_input_representation.{save_file_type}', target_input_representation)
-                    save_data(f'target_output_representation.{save_file_type}', target_output_representation)
-                    return [target_input_representation, target_output_representation], vocabulary
-                else:
-                    return text_representation, vocabulary
-
-
-
-    def preprocess_SA(self, chunk_size=0, initial_stage=1, seq_length=50):
-
-        if initial_stage <= 1:
-            print("STAGE ONE - CLEANING DATA")
-            #initial_corpus, target_corpus = self._load_csv(self._initial_language_file)
-            initial_corpus, target_corpus = self._load_tweet(self._initial_language_file)
-            print("INITIAL CORPUS CLEANING...")
-            cleaned_initial_corpus = self.clear_corpus(initial_corpus, target_language=False)
-            print("STAGE ONE COMPLETE")
-
-        if initial_stage <= 2:
-            print("STAGE TWO - CREATING VOCABULARIES")
-            if initial_stage > 1:
-                print("LOADING DATA...")
-                cleaned_initial_corpus = load_data(f'cleaned_corpus.txt.{self._initial_language}')
-
-            print("CREATING INITIAL LANGUAGE VOCABULARY...")
-            for sentence in tqdm(cleaned_initial_corpus):
-                self._initial_vocabulary.add_sentence(sentence)
-
-            print("SAVING VOCABULARY...")
-            save_data(f'vocabulary.{self._initial_language}', self._initial_vocabulary)
-
-            print("STAGE TWO COMPLETE")
-
-            if initial_stage <= 3:
-                print("STAGE THREE - CREATING TEXT REPRESENTATION")
-
-                if initial_stage > 2:
-                    print("LOADING DATA...")
-                    cleaned_initial_corpus = load_data(f'cleaned_corpora.txt.{self._initial_language}')
-                    self._initial_vocabulary = load_data(f'vocabulary.{self._initial_language}')
-
-                print("CREATING INITIAL TEXT REPRESENTATION...")
-                cleaned_initial_corpus = self.create_text_representation(
-                    cleaned_initial_corpus, seq_length, target_language=False)
-                initial_text_representation = np.array(cleaned_initial_corpus, dtype=object)
-                save_data(f'text_representation.{self._initial_language}', initial_text_representation)
-
-            # REMOVE TO SPECIFIC
-            target_words = []
-            for word in target_corpus:
-                if word not in target_words:
-                    target_words.append(word)
-            print(target_words)
-
-            target_dict = {}
-            for idx, word in enumerate(target_words):
-                target_dict[word] = idx
-
-            target_representation = []
-            print(target_dict)
-            for word in target_corpus:
-                target_representation.append(target_dict[word])
-
-            #print(target_representation)
-            target_corpus = target_representation
-            # EXTREMELY LAME REMAKE WITH VOCAB CLASS!!!!
-
-
-            print(np.shape(initial_text_representation))
-            print(np.shape(target_corpus))
-
-            print(initial_text_representation[:5])
-            print(target_corpus[:5])
-
-            return initial_text_representation, target_corpus, target_dict
-
-
-
-
-    def preprocess_NMT(self, chunk_size=0, initial_stage=1, seq_length=20):  # ADD ENUM WITH STAGES
-
-        if initial_stage <= 1:
-            print("STAGE ONE - CLEANING DATA")
-            initial_corpus = self._load_by_line(self._initial_language_file, chunk_size)
-            target_corpus = self._load_by_line(self._target_language_file, chunk_size)
-            print("INITIAL CORPUS CLEANING...")
-            cleaned_initial_corpus = self.clear_corpus(initial_corpus, target_language=False)
-            print("TARGET CORPUS CLEANING...")
-            cleaned_target_corpus = self.clear_corpus(target_corpus, target_language=True)
-            print("STAGE ONE COMPLETE")
-
-        if initial_stage <= 2:
-            print("STAGE TWO - CREATING VOCABULARIES")
-            if initial_stage > 1:
-                print("LOADING DATA...")
-                cleaned_initial_corpus = load_data(f'cleaned_corpus.txt.{self._initial_language}')
-                cleaned_target_corpus = load_data(f'cleaned_corpus.txt.{self._target_language}')
-
-            print("CREATING INITIAL LANGUAGE VOCABULARY...")
-            for sentence in tqdm(cleaned_initial_corpus):
-                self._initial_vocabulary.add_sentence(sentence)
-
-            print("CREATING TARGET LANGUAGE VOCABULARY...")
-            for sentence in tqdm(cleaned_target_corpus):
-                self._target_vocabulary.add_sentence(sentence)
-
-            print("SAVING VOCABULARY...")
-            save_data(f'vocabulary.{self._initial_language}', self._initial_vocabulary)
-            save_data(f'vocabulary.{self._target_language}', self._target_vocabulary)
-
-            print("STAGE TWO COMPLETE")
-
         if initial_stage <= 3:
             print("STAGE THREE - CREATING TEXT REPRESENTATION")
 
             if initial_stage > 2:
                 print("LOADING DATA...")
-                cleaned_initial_corpus = load_data(f'cleaned_corpora.txt.{self._initial_language}')
-                cleaned_target_corpus = load_data(f'cleaned_corpora.txt.{self._target_language}')
-                self._initial_vocabulary = load_data(f'vocabulary.{self._initial_language}')
-                self._target_vocabulary = load_data(f'vocabulary.{self._target_language}')
+                cleaned_corpus = load_data(f'cleaned_corpus.txt.{save_file_type}')
+                vocabulary = load_data(f'vocabulary.{save_file_type}')
 
-            print("CREATING INITIAL TEXT REPRESENTATION...")
-            cleaned_initial_corpus = self.create_text_representation(
-                cleaned_initial_corpus, seq_length, target_language=False)
-            initial_text_representation = np.array(cleaned_initial_corpus, dtype=object)
-            save_data(f'text_representation.{self._initial_language}', initial_text_representation)
+            print("CREATING TEXT REPRESENTATION...")
+            if self._task == "SA" and if_target:
+                seq_length = 1
 
-            print("CREATING TARGET TEXT REPRESENTATION...")
-            cleaned_target_corpus = self.create_text_representation(
-                cleaned_target_corpus, seq_length, target_language=True)
+            cleaned_corpus = self.create_text_representation(
+                cleaned_corpus, seq_length, vocabulary, target_language=if_target)
+            text_representation = np.array(cleaned_corpus, dtype=object)
+            save_data(f'text_representation.{save_file_type}', text_representation)
 
-            print("CREATING OUTPUT DATA REPRESENTATION...")
-            target_input_representation, target_output_representation = self.create_output_data(cleaned_target_corpus)
-            save_data(f'target_input_representation.{self._target_language}', target_input_representation)
-            save_data(f'target_output_representation.{self._target_language}', target_output_representation)
-
-            train_data = (initial_text_representation, target_input_representation, target_output_representation)
-            test_data = []
-
-            # train_data = (list_splitter(initial_text_representation, 0.8)[0],
-            #               list_splitter(target_input_representation, 0.8)[0],
-            #               list_splitter(target_output_representation, 0.8)[0])
-            #
-            # test_data = (list_splitter(initial_text_representation, 0.8)[1],
-            #               list_splitter(target_output_representation, 0.8)[1])
-
-            return self._initial_vocabulary, self._target_vocabulary, train_data, test_data
-
-            ###
+            if self._task == "MT" and if_target:
+                target_input_representation, target_output_representation = self.create_output_data(
+                    cleaned_corpus)
+                save_data(f'target_input_representation.{save_file_type}', target_input_representation)
+                save_data(f'target_output_representation.{save_file_type}', target_output_representation)
+                return [target_input_representation, target_output_representation], vocabulary
+            else:
+                return text_representation, vocabulary
