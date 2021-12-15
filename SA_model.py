@@ -20,7 +20,7 @@ class SAModel:
         self.encoder_model = None
         self.decoder_model = None
 
-    def build_model(self):
+    def build(self):
 
         model = Sequential()
         model.add(Embedding(self.vocab_size, 200, input_length=len(self.x_train[0]), mask_zero=True))
@@ -51,11 +51,7 @@ class SAModel:
         y_train = self.y_train
         y_train = np.asarray(y_train).astype('int32')
 
-        print(x_train)
-
         y_train = np.reshape(y_train, (np.shape(y_train)[0], 1))
-        print(np.shape(y_train))
-        print(y_train)
 
         self._model.fit(x_train, y_train,
                         batch_size=batch_size,

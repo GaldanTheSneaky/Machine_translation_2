@@ -1,7 +1,7 @@
-from preprocess import Preprocessing
-from MT_model import NMTModel
-from SA_model import SAModel
 import pandas as pd
+
+from SentimentAnalysis import SentimentAnalysis
+from MachineTranslation import MachineTranslation
 
 INITIAL_LANGUAGE = 'ru'
 TARGET_LANGUAGE = "en"
@@ -20,32 +20,16 @@ def load_tweet():
     return data[data.columns[0]].tolist(), data[data.columns[1]].tolist()
 
 
-def run_main_SA():
-    preprocessor = Preprocessing(initial_data="en",
-                                 initial_data_file=SA_FILENAME,
-                                 task="SA")
-
+def SA():
     initial_data, target_data = load_tweet()
-    x_train, x_vocab, y_train, y_vocab = preprocessor.run(initial_stage=1, initial_corpus=initial_data, target_corpus=target_data)
-
-    model = SAModel([x_train, y_train], y_vocab)
-    model.build_model()
-    model.train()
+    SA = SentimentAnalysis(initial_data=initial_data, target_data=target_data, prepr_initial_stage=1)
+    SA.run()
 
 
-def run_main_MT():
-    preprocessor = Preprocessing(initial_data=INITIAL_LANGUAGE,
-                                 target_data=TARGET_LANGUAGE,
-                                 initial_data_file=RU_FILENAME,
-                                 target_data_file=EN_FILENAME,
-                                 task="MT")
-
-    initial_data, initial_vocab, target_data, target_vocab = preprocessor.run("txt", initial_stage=3)
-    model = NMTModel(initial_vocab, target_vocab, use_attention=True)
-    model.build()
-    test_data = ([initial_data[2]], [target_data[1][2]])
-    model.train([initial_data, target_data[0], target_data[1]], test_data, 30)
+def MT():
+    MT = MachineTranslation(initial_data_file=RU_FILENAME, target_data_file=EN_FILENAME)
+    MT.run()
 
 
 if __name__ == "__main__":
-    run_main_SA()
+    MT()

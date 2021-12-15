@@ -5,7 +5,6 @@ import string
 from tqdm import tqdm
 import pandas as pd
 from nltk.corpus import stopwords
-import os
 import random
 
 from vocabulary import Vocabulary
@@ -28,13 +27,11 @@ def save_data(filename, data):
 
 
 class Preprocessing:
-    def __init__(self, task, initial_data: str = None, target_data: str = None, initial_data_file=None, target_data_file=None):
-        self._initial_language = initial_data
-        self._target_language = target_data
+    def __init__(self, task, initial_data_file=None, target_data_file=None):
         self._initial_data_file = initial_data_file
         self._target_data_file = target_data_file
-        self._initial_vocabulary = Vocabulary(f'{initial_data}', task)
-        self._target_vocabulary = Vocabulary(f'{target_data}', task)
+        self._initial_vocabulary = Vocabulary(task)
+        self._target_vocabulary = Vocabulary(task)
         self._task = task
 
     def _load_by_line(self, filename, chunk_size, encoding='utf-8'):
@@ -57,12 +54,6 @@ class Preprocessing:
         data = pd.read_csv(filename)
         return data[data.columns[0]].tolist(), data[data.columns[1]].tolist()
 
-    def _load_tweet(self, filename):  # delete in the future
-        df = pd.read_csv('Tweets.csv', sep=',')
-        tweet_df = df[['text', 'airline_sentiment']]
-        tweet_df = tweet_df[tweet_df['airline_sentiment'] != 'neutral']
-        data = tweet_df
-        return data[data.columns[0]].tolist(), data[data.columns[1]].tolist()
 
     def clear_corpus(self, corpus, save_file_type, target_language=False):
         if target_language:
@@ -163,7 +154,7 @@ class Preprocessing:
                 cleaned_corpus = load_data(f'cleaned_corpus.txt.{save_file_type}')
 
             print("CREATING INITIAL LANGUAGE VOCABULARY...")
-            vocabulary = Vocabulary(f'{save_file_type}', self._task)
+            vocabulary = Vocabulary(self._task)
             for sentence in tqdm(cleaned_corpus):
                 vocabulary.add_sentence(sentence)
 

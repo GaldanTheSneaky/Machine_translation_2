@@ -3,8 +3,7 @@ class Vocabulary:
     SOS_token = 1  # Start-of-sentence token
     EOS_token = 2  # End-of-sentence token
 
-    def __init__(self, name, task): #tasks: MT, SA
-        self.name = name
+    def __init__(self, task): #tasks: MT, SA
         if task == "MT":
             self.word2index = {'_PAD_': self.PAD_token, 'START_': self.SOS_token, '_END': self.EOS_token}
             self.word2count = {'_PAD_': 0, 'START_': 0, '_END': 0}
